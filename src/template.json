@@ -1,0 +1,107 @@
+{
+  "name": "msdazk",
+  "inputProperties": [
+    {
+      "id": "zkEndpoint",
+      "type": "STRING",
+      "value": "1.1.1.1:2181, 1.1.1.2:2181",
+      "metaData": {
+        "description": "zk endpoint list",
+        "displayName": "zk endpoints",
+        "isRequired": true
+      }
+    },
+    {
+      "id": "poolName",
+      "type": "STRING",
+      "value": "/Common/zkSamplePool",
+      "metaData": {
+        "description": "Pool Name to be created",
+        "displayName": "BIG-IP Pool Name",
+        "isRequired": true
+      }
+    },
+    {
+      "id": "poolType",
+      "type": "STRING",
+      "value": "round-robin",
+      "metaData": {
+        "description": "load-balancing-mode",
+        "displayName": "Load Balancing Mode",
+        "isRequired": true,
+        "uiType": "dropdown",
+        "uiHints": {
+          "list": {
+            "dataList": [
+              "round-robin",
+              "least-connections-member",
+              "least-connections-node"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "healthMonitor",
+      "type": "STRING",
+      "value": "none",
+      "metaData": {
+        "description": "Health Monitor",
+        "displayName": "Health Monitor",
+        "isRequired": true,
+        "uiType": "dropdown",
+        "uiHints": {
+          "list": {
+            "dataList": [
+              "tcp",
+              "udp",
+              "http",
+              "none"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "serviceName",
+      "type": "STRING",
+      "value": "/services/http",
+      "metaData": {
+        "description": "Service name to be exposed",
+        "displayName": "Service Name in registry",
+        "isRequired": false
+      }
+    }
+  ],
+  "dataProperties": [
+    {
+      "id": "pollInterval",
+      "type": "NUMBER",
+      "value": 30,
+      "metaData": {
+        "description": "Interval of polling from BIG-IP to registry, 30s by default.",
+        "displayName": "Polling Invertal",
+        "isRequired": false
+      }
+    }
+  ],
+  "configurationProcessorReference": {
+    "link": "https://localhost/mgmt/shared/iapp/processors/msdazkConfig"
+  },
+  "auditProcessorReference": {
+    "link": "https://localhost/mgmt/shared/iapp/processors/msdazkEnforceConfiguredAudit"
+  },
+  "audit": {
+    "intervalSeconds": 60,
+    "policy": "ENFORCE_CONFIGURED"
+  },
+  "configProcessorTimeoutSeconds": 30,
+  "statsProcessorTimeoutSeconds": 15,
+  "configProcessorAffinity": {
+    "processorPolicy": "LOAD_BALANCED",
+    "affinityProcessorReference": {
+      "link": "https://localhost/mgmt/shared/iapp/processors/affinity/load-balanced"
+    }
+  },
+  "state": "TEMPLATE"
+}
