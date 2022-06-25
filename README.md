@@ -124,7 +124,7 @@ Save the JSON to block.json and use it in the curl call. Refer to the clouddoc l
 }
 ```
 
-Post the block REST container using curl. 
+Post the block through REST API using curl. 
 ```bash
 curl -sk -X POST -d @block.json https://bigip_mgmt_ip:8443/mgmt/shared/iapp/blocks
 ```
