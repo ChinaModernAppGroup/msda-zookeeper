@@ -1,10 +1,6 @@
-# Basic Pool iAppLX
+# iAppLX MSDA for zookeeper
 
-This iApp is an example of accessing iCRD, including an audit processor.  The iApp itself is very simple - it manages the members of a pool.
-
-The audit processor wakes up every 30 seconds (configurable). If the pool has changed on the BigIP then the block is rebound, restoring the Big-IP to the previous configuration.
-
-This iApp also demostrates usage of identified requests with custom HTTPS port when user specifies remote BIG-IP address and device-group name when configuring. In this configuration, Device trust with remote BIG-IP address should be established ahead of time before deploying iApp.
+This iApp is an example of MSDA for etcdv2, including an audit processor.
 
 ## Build (requires rpmbuild)
 
@@ -12,16 +8,14 @@ This iApp also demostrates usage of identified requests with custom HTTPS port w
 
 Build output is an RPM package
 ## Using IAppLX from BIG-IP UI
-If you are using BIG-IP, install f5-iappslx-basic-pool RPM package using iApps->Package Management LX->Import screen. To create an application, use iApps-> Templates LX -> Application Services -> Applications LX -> Create screen. Default IApp LX UI will be rendered based on the input properties specified in basic pool IAppLX.
+If you are using BIG-IP, install f5-iapplx-msda-zk RPM package using iApps->Package Management LX->Import screen. To create an application, use iApps-> Templates LX -> Application Services -> Applications LX -> Create screen. Default IApp LX UI will be rendered based on the input properties specified in basic pool IAppLX.
 
-Pool name is mandatory when creating or updating iAppLX configuration. Optionally you can add any number of pool members.
+## Using IAppLX from REST API to configure BIG-IP
 
-## Using IAppLX from Container to configure BIG-IP [coming soon]
+Using the REST API to work with BIG-IP with f5-iapplx-msda-zk IAppLX package installed. 
 
-Run the REST container [TBD] with f5-iappslx-basic-pool IAppLX package. Pass in the remote BIG-IP to be trusted when starting REST container as environment variable.
-
-Create an Application LX block with hostname, deviceGroupName, poolName, poolType and poolMembers as shown below.
-Save the JSON to block.json and use it in the curl call
+Create an Application LX block with all inputProperties as shown below.
+Save the JSON to block.json and use it in the curl call. Refer to the clouddoc link for more detail: https://clouddocs.f5.com/products/iapp/iapp-lx/tmos-14_0/iapplx_ops_tutorials/creating_iappslx_with_rest.html .
 
 ```json
 {
@@ -130,8 +124,7 @@ Save the JSON to block.json and use it in the curl call
 }
 ```
 
-Post the block REST container using curl. Note you need to be running REST container for this step
-and it needs to listening at port 8433
+Post the block REST container using curl. 
 ```bash
-curl -sk -X POST -d @block.json https://localhost:8443/mgmt/shared/iapp/blocks
+curl -sk -X POST -d @block.json https://bigip_mgmt_ip:8443/mgmt/shared/iapp/blocks
 ```
