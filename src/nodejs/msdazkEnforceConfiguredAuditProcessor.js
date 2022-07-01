@@ -13,6 +13,7 @@
   language governing permissions and limitations under the License.
 
   Updated by Ping Xiong on May/13/2022
+  Updated by Ping Xiong on Jun/30/2022, using global var for polling signal.
 
 */
 
@@ -23,11 +24,11 @@ var q = require("q");
 
 var blockUtil = require("./blockUtils");
 var logger = require("f5-logger").getInstance();
-var fs = require('fs');
+//var fs = require('fs');
 
 // Setup a signal for onpolling status. It has an initial state "false".
-const msdazkOnPollingSignal = '/var/tmp/msdazkOnPolling';
-var msdaOnPolling = false;
+//const msdazkOnPollingSignal = '/var/tmp/msdazkOnPolling';
+//var msdaOnPolling = false;
 
 
 function msdazkEnforceConfiguredAuditProcessor() {
@@ -69,52 +70,66 @@ msdazkEnforceConfiguredAuditProcessor.prototype.onStart = function (success) {
 // Populate auditTaskState.currentInputProperties with the values on the device.
 // In ENFORCE_CONFIGURED, ignore the found configuration is on the BigIP.
 msdazkEnforceConfiguredAuditProcessor.prototype.onPost = function (restOperation) {
-    entryCounter++;
-    logger.fine(getLogHeader() + "MSDA Audit onPost: START");
-    var oThis = this;
-    var auditTaskState = restOperation.getBody();
+  entryCounter++;
+  logger.fine(getLogHeader() + "MSDA Audit onPost: START");
+  var oThis = this;
+  var auditTaskState = restOperation.getBody();
 
+  setTimeout(function () {
     try {
-        if (!auditTaskState ) {
-            throw new Error("AUDIT: Audit task state must exist ");
-        }
-        /*
+      if (!auditTaskState) {
+        throw new Error("AUDIT: Audit task state must exist ");
+      }
+      /*
         logger.fine(getLogHeader() + "Incoming properties: " +
             this.restHelper.jsonPrinter(auditTaskState.currentInputProperties));
-        
-        
-        var blockInputProperties = blockUtil.getMapFromPropertiesAndValidate(
-            auditTaskState.currentInputProperties,
-            ["zkEndpoint", "authenticationCert", "nameSpace", "serviceName", "poolName", "poolType", "healthMonitor"]
-        );
-        
         */
-        // Check the polling state, trigger ConfigProcessor if needed.
-        // Move the signal checking here
-        logger.fine('MSDA zk Audit: msdaOnpolling: ', msdaOnPolling);
-        fs.access(msdazkOnPollingSignal, fs.constants.F_OK, function (err) {
-            if (err) {
-                logger.fine('MSDA zk Audit: Checking polling signal hits error: ', err.message);
-                logger.fine("MSDA zk audit onPost: ConfigProcessor is NOT on polling state, will set msdaOnpolling status to FALSE.");
-                msdaOnPolling = false;
-                try {
-                    var poolNameObject = getObjectByID("poolName", auditTaskState.currentInputProperties);
-                    poolNameObject.value = null;
-                    oThis.finishOperation(restOperation, auditTaskState);
-                    logger.fine("MSDA zk audit onPost: trigger ConfigProcessor onPost ");
-                } catch (err) {
-                    logger.fine("MSDA zk audit onPost: Failed to send out restOperation. ", err.message);
-                }
-            } else {
-                logger.fine("MSDA zk audit onPost: ConfigProcessor is on polling state, will set msdaOnPolling status to TRUE.");
-                logger.fine("MSDA zk audit onPost: ConfigProcessor is on polling state, no need to fire an onPost.");
-                msdaOnPolling = true;
-            }
-        });
+
+      var blockInputProperties = blockUtil.getMapFromPropertiesAndValidate(
+        auditTaskState.currentInputProperties,
+        ["poolName", "poolType", "healthMonitor"]
+      );
+
+      // Check the polling state, trigger ConfigProcessor if needed.
+      // Move the signal checking here
+      logger.fine("MSDA zk Audit: msdazkOnpolling: ", global.msdazkOnPolling);
+      logger.fine(
+        "MSDA zk Audit: msdazk poolName: ",
+        blockInputProperties.poolName.value
+      );
+      if (
+        global.msdazkOnPolling.includes(blockInputProperties.poolName.value)
+      ) {
+        logger.fine(
+          "MSDA zk audit onPost: ConfigProcessor is on polling state, no need to fire an onPost."
+        );
+      } else {
+        logger.fine(
+          "MSDA zk audit onPost: ConfigProcessor is NOT on polling state, will trigger ConfigProcessor onPost."
+        );
+        try {
+          var poolNameObject = getObjectByID(
+            "poolName",
+            auditTaskState.currentInputProperties
+          );
+          poolNameObject.value = null;
+          oThis.finishOperation(restOperation, auditTaskState);
+          logger.fine("MSDA zk audit onPost: trigger ConfigProcessor onPost ");
+        } catch (err) {
+          logger.fine(
+            "MSDA zk audit onPost: Failed to send out restOperation. ",
+            err.message
+          );
+        }
+      }
     } catch (ex) {
-        logger.fine("msdazkEnforceConfiguredAuditProcessor.prototype.onPost caught generic exception " + ex);
-        restOperation.fail(ex);
+      logger.fine(
+        "msdazkEnforceConfiguredAuditProcessor.prototype.onPost caught generic exception " +
+          ex
+      );
+      restOperation.fail(ex);
     }
+  }, 1000);
 };
 
 var getObjectByID = function ( key, array) {
