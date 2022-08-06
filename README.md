@@ -4,7 +4,17 @@ This iApp is an example of MSDA for etcdv2, including an audit processor.
 
 ## Build (requires rpmbuild)
 
+  Check the modules dependency:
+```bash
+    $ cd src/nodejs
+    $ npm list
+```
+  Fix all dependent modules with `npm install` command.
+  Go back to the root direct of the project, build an rpm package:
+```bash
+    $ cd ../..
     $ npm run build
+```
 
 Build output is an RPM package
 ## Using IAppLX from BIG-IP UI
