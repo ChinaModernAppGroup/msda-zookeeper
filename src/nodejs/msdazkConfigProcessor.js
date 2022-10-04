@@ -14,6 +14,12 @@
   
   Updated by Ping Xiong on May/15/2022.
   Updated by Ping Xiong on Jun/30/2022, using global var for polling signal.
+  Updated by Ping Xiong on Oct/04/2022, modify the polling signal into a json object to keep more information.
+  let blockInstance = {
+    name: "instanceName", // a block instance of the iapplx config
+    state: "polling", // can be "polling" for normal running state; "update" to modify the iapplx config
+    bigipPool: "/Common/samplePool"
+  }
 */
 
 'use strict';
@@ -24,7 +30,7 @@ var blockUtil = require("./blockUtils");
 var logger = require('f5-logger').getInstance();
 var mytmsh = require('./TmshUtil');
 var zookeeper = require('node-zookeeper-client');
-var EventEmitter = require('events').EventEmitter;
+//var EventEmitter = require('events').EventEmitter;
 //var stopPollingEvent = new EventEmitter(); 
 
 
@@ -94,6 +100,7 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
         oThis = this;
     logger.fine("MSDA: onPost, msdazkConfigProcessor.prototype.onPost");
 
+    var instanceName;
     var inputProperties;
     var dataProperties;
     try {
@@ -101,6 +108,7 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
         blockState = configTaskState.block;
         logger.fine("MSDA: onPost, inputProperties ", blockState.inputProperties);
         logger.fine("MSDA: onPost, dataProperties ", blockState.dataProperties);
+        logger.fine("MSDA: onPost, instanceName ", blockState.name);
         inputProperties = blockUtil.getMapFromPropertiesAndValidate(
             blockState.inputProperties,
             ["zkEndpoint", "poolName", "poolType", "healthMonitor", "serviceName"]
@@ -109,7 +117,7 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
             blockState.dataProperties,
             ["pollInterval"]
         );
-
+        instanceName = blockState.name;
     } catch (ex) {
         restOperation.fail(ex);
         return;
@@ -137,36 +145,100 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
     // Check the existence of the pool in BIG-IP, create an empty pool if the pool doesn't exist.
     mytmsh.executeCommand("tmsh -a list ltm pool " + inputPoolName)
     .then(function () {
-        logger.fine("MSDA: onPost, found the pool, no need to create an initial empty pool.");
+        logger.fine(
+            "MSDA: onPost, " +
+            instanceName +
+            " found the pool, no need to create an initial empty pool."
+        );
         return;
     }, function (error) {
-        logger.fine("MSDA: onPost, GET of pool failed, adding an initial empty pool: " + inputPoolName);
+        logger.fine(
+            "MSDA: onPost, " +
+            instanceName +
+            " GET of pool failed, adding an initial empty pool: " +
+            inputPoolName
+        );
         let inputEmptyPoolConfig = inputPoolName + ' monitor ' + inputMonitor + ' load-balancing-mode ' + inputPoolType + ' members none';
         let commandCreatePool = 'tmsh -a create ltm pool ' + inputEmptyPoolConfig;
         return mytmsh.executeCommand(commandCreatePool);
     })
     .catch(function (error) {
-        logger.fine("MSDA: onPost, list pool failed: " + error.message);
+        logger.fine(
+            "MSDA: onPost, " + instanceName + " list pool failed: ",
+            error.message
+        );
     });
 
 
     // Set the polling interval
     if (pollInterval) {
         if (pollInterval < 10000) {
-            logger.fine("MSDA: onPost, pollInternal is too short, will set it to 10s ", pollInterval);
+            logger.fine(
+                "MSDA: onPost, " +
+                instanceName +
+                " pollInternal is too short, will set it to 10s ",
+                pollInterval
+            );
             pollInterval = 10000;
         }
     } else {
-        logger.fine("MSDA: onPost, pollInternal is not set, will set it to 30s ", pollInterval);
+        logger.fine(
+            "MSDA: onPost, " +
+            instanceName +
+            " pollInternal is not set, will set it to 30s ",
+            pollInterval
+        );
         pollInterval = 30000;
     }
     
-    // Setup the polling signal for audit
-    if (global.msdazkOnPolling.includes(inputPoolName)) {
-        return logger.fine("MSDA: onPost, already has an instance polling the same pool, please check it out: " + inputPoolName);
-    } else { 
-        global.msdazkOnPolling.push(inputPoolName);
-        logger.fine("MSDA onPost: set msdazkOnpolling signal: ", global.msdazkOnPolling);
+    // Setup the polling signal for audit and update
+    let blockInstance = {
+        name: instanceName,
+        bigipPool: inputPoolName,
+        state: "polling"
+    };
+
+    let signalIndex = global.msdazkOnPolling.findIndex(instance => instance.name === instanceName);
+    if (signalIndex !== -1) {
+        // Already has the instance, change the state into "update"
+        global.msdazkOnPolling.splice(signalIndex, 1);
+        blockInstance.state = "update";
+    }
+    logger.fine("MSDA: onPost, blockInstance:", blockInstance);
+
+    // Setup a signal to identify existing polling loop
+    var existingPollingLoop = false;
+
+    // Check if there is a conflict bigipPool in configuration
+
+    if (
+        global.msdazkOnPolling.some(
+            (instance) => instance.bigipPool === inputPoolName
+        )
+    ) {
+        logger.fine(
+            "MSDA: onPost, " +
+            instanceName +
+            " already has an instance polling the same pool, change BLOCK to ERROR: ",
+            inputPoolName
+        );
+        try { 
+            throw new Error("onPost: poolName conflict: " + inputPoolName + " , will set the BLOCK to ERROR state");
+        } catch (error) {
+            configTaskUtil.sendPatchToErrorState(
+              configTaskState,
+              error,
+              oThis.getUri().href,
+              restOperation.getBasicAuthorization()
+            );
+        }
+        return;
+    } else {
+        global.msdazkOnPolling.push(blockInstance);
+        logger.fine(
+            "MSDA onPost: " + instanceName + " set msdazkOnpolling signal: ",
+            global.msdazkOnPolling
+        );
     }
 
     /*
@@ -178,9 +250,12 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
     }
     */
 
-    logger.fine("MSDA: onPost, Input properties accepted, change to BOUND status, start to poll Registry for: " + inputPoolName);
-
-    //stopPolling = false;
+    logger.fine(
+        "MSDA: onPost, " +
+        instanceName +
+        " Input properties accepted, change to BOUND status, start to poll Registry for: ",
+        inputPoolName
+    );
 
     configTaskUtil.sendPatchToBoundState(configTaskState, 
             oThis.getUri().href, restOperation.getBasicAuthorization());
@@ -188,7 +263,10 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
     // A internal service to retrieve service member information from registry, and then update BIG-IP setting.
 
     //inputEndPoint = inputEndPoint.toString().split(","); 
-    logger.fine("MSDA: onPost, registry endpoints: " + inputEndPoint);
+    logger.fine(
+        "MSDA: onPost, " + instanceName + " registry endpoints: ",
+        inputEndPoint
+    );
 
 
     //Create zkclient to the registry
@@ -205,49 +283,93 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
             function (error, children, stat) {
                 if (error) {
                     logger.fine(
-                        'MSDA: onPost, Failed to list children of node: %s due to: %s. ',
+                        "MSDA: onPost, " + instanceName + " Failed to list children of node: %s due to: %s. ",
                         inputServiceName,
                         error
                     );
                     if (error.getCode() == zookeeper.Exception.NO_NODE) {
                         //To clear the pool
-                        logger.fine("MSDA: onPost, endpoint list is empty, will clear the BIG-IP pool as well");
+                        logger.fine(
+                            "MSDA: onPost, " +
+                            instanceName +
+                            " endpoint list is empty, will clear the BIG-IP pool as well"
+                        );
                         mytmsh.executeCommand("tmsh -a list ltm pool " + inputPoolName)
                             .then(function () {
-                                logger.fine("MSDA: onPost, found the pool, will delete all members as it's empty.");
+                                logger.fine(
+                                    "MSDA: onPost, " +
+                                    instanceName +
+                                    " found the pool, will delete all members as it's empty."
+                                );
                                 let commandUpdatePool = 'tmsh -a modify ltm pool ' + inputPoolName + ' members delete { all}';
                                 return mytmsh.executeCommand(commandUpdatePool)
                                     .then(function (response) {
-                                        logger.fine("MSDA: onPost, update the pool to delete all members as it's empty. ");
+                                        logger.fine(
+                                            "MSDA: onPost, " +
+                                            instanceName +
+                                            " update the pool to delete all members as it's empty. "
+                                        );
                                     });
                             }, function (error) {
-                                logger.fine("MSDA: onPost, GET of pool failed, adding an empty pool: " + inputPoolName);
-                                let inputEmptyPoolConfig = inputPoolName + ' monitor ' + inputMonitor + ' load-balancing-mode ' + inputPoolType + ' members none';
+                                logger.fine(
+                                    "MSDA: onPost, " +
+                                    instanceName +
+                                    " GET of pool failed, adding an empty pool: " +
+                                    inputPoolName
+                                );
+                                let inputEmptyPoolConfig = inputPoolName +
+                                    ' monitor ' +
+                                    inputMonitor +
+                                    ' load-balancing-mode ' +
+                                    inputPoolType +
+                                    ' members none';
                                 let commandCreatePool = 'tmsh -a create ltm pool ' + inputEmptyPoolConfig;
                                 return mytmsh.executeCommand(commandCreatePool);
                             })
                                 // Error handling
                             .catch(function (error) {
-                                logger.fine("MSDA: onPost, Delete failed: " + error.message);
+                                logger.fine(
+                                    "MSDA: onPost, " +
+                                    instanceName +
+                                    " Delete failed: " +
+                                    error.message
+                                );
                             });
                     }
-                    //setTimeout(function () {
-                    //    listChildren(zkClient, inputServiceName);
-                    //}, 16000);
                 } else {
-                    logger.fine('MSDA: onPost, Children of node: %s are: %j.', inputServiceName, children);
+                    logger.fine(
+                        "MSDA: onPost, " + instanceName + " Children of node: %s are: %j.",
+                        inputServiceName,
+                        children
+                    );
                     // Configure the children into BIG-IP
                     if (children) {
                         // Format the node information into pool members form
                         poolMembers = "{" + children.join(" ") + "}";
-                        logger.fine("MSDA: onPost, pool members: " + poolMembers);
-                        let inputPoolConfig = inputPoolName + ' monitor ' + inputMonitor + ' load-balancing-mode ' + inputPoolType + ' members replace-all-with ' + poolMembers;
+                        logger.fine(
+                            "MSDA: onPost, " +
+                            instanceName +
+                            " pool members: " +
+                            poolMembers
+                        );
+                        let inputPoolConfig = inputPoolName +
+                            ' monitor ' +
+                            inputMonitor +
+                            ' load-balancing-mode ' +
+                            inputPoolType +
+                            ' members replace-all-with ' +
+                            poolMembers;
 
                         // Use tmsh to update BIG-IP configuration instead of restful API
 
                         // Start with check the exisitence of the given pool
                         mytmsh.executeCommand("tmsh -a list ltm pool " + inputPoolName).then(function () {
-                            logger.fine("MSDA: onPost, Found a pre-existing pool. Update pool setting: " + inputPoolName);
+                            logger.fine(
+                                "MSDA: onPost, " +
+                                instanceName +
+                                " Found a pre-existing pool. Update pool setting: ",
+                                inputPoolName
+                            );
                             let commandUpdatePool = 'tmsh -a modify ltm pool ' + inputPoolConfig;
                             return mytmsh.executeCommand(commandUpdatePool);
                         }, function (error) {
@@ -257,7 +379,12 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
                         })
                             // Error handling
                             .catch(function (error) {
-                                logger.fine("MSDA: onPost, Add Failure: adding/modifying a pool: " + error.message);
+                                logger.fine(
+                                    "MSDA: onPost, " +
+                                    instanceName +
+                                    " Add Failure: adding/modifying a pool: ",
+                                    error.message
+                                );
                             });
                     }
                 }
@@ -268,35 +395,136 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
     // Start the loop to poll the zookeeper service
     (function schedule() {
         var pollRegistry = setTimeout(function () {
+
+            // If signal is "update", change it into "polling" for new polling loop
+            if (global.msdazkOnPolling.some(instance => instance.name === instanceName)) {
+                let signalIndex = global.msdazkOnPolling.findIndex(instance => instance.name === instanceName);
+                if (global.msdazkOnPolling[signalIndex].state === "update") {
+                    if (existingPollingLoop) {
+                        logger.fine(
+                            "MSDA: onPost/polling, " +
+                            instanceName +
+                            " update config, existing polling loop."
+                        );
+                    } else {
+                        //logger.fine("MSDA: onPost/polling, " + instanceName + " update config, a new polling loop.");
+                        global.msdazkOnPolling[signalIndex].state = "polling";
+                        logger.fine(
+                            "MSDA: onPost/polling, " +
+                            instanceName +
+                            " update the signal.state into polling for new polling loop: ",
+                            global.msdazkOnPolling[signalIndex]
+                        );
+                    }
+                }
+                // update the existingPollingLoop to true
+                existingPollingLoop = true;
+            } else {
+                // Non-exist instance, will NOT proceed to poll the registry
+                return logger.fine(
+                    "MSDA: onPost/polling, " +
+                    instanceName +
+                    " Stop polling registry."
+                );
+            }
+
+            // Start to poll the zk registry ...
             zkClient = zookeeper.createClient(inputEndPoint, { retries: 3 });
             zkClient.connect();
             zkClient.once('connected', function () {
-                logger.fine("MSDA: onPost, registry connected, will retrieve service end-points for " + inputPoolName);
+                logger.fine(
+                    "MSDA: onPost, " +
+                    instanceName +
+                    " registry connected, will retrieve service end-points for ",
+                    inputPoolName
+                );
                 listChildren(zkClient, inputServiceName);
                 zkClient.close();
-                logger.fine("MSDA: onPost, registry connection closed for " + inputPoolName);
+                logger.fine(
+                    "MSDA: onPost, " +
+                    instanceName +
+                    " registry connection closed for ",
+                    inputServiceName
+                );
             });
-            schedule();
+            schedule(); // How to handle potential overlapping issue?
         }, pollInterval);
 
-        // stop polling while undeployment
-        if (global.msdazkOnPolling.includes(inputPoolName)) {
-            logger.fine("MSDA: onPost, keep polling registry for: " + inputPoolName);            
-        } else {
+        // stop polling while undeployment or update the config
+
+        let stopPolling = true;
+
+        if (
+            global.msdazkOnPolling.some(
+                (instance) => instance.name === instanceName
+            )
+        ) {
+            let signalIndex = global.msdazkOnPolling.findIndex(
+                (instance) => instance.name === instanceName
+            );
+            if (global.msdazkOnPolling[signalIndex].state === "polling") {
+                logger.fine(
+                    "MSDA: onPost, " +
+                    instanceName + " keep polling registry for: ",
+                    inputServiceName
+                );
+                stopPolling = false;
+            } else {
+                // state = "update", stop polling for existing loop; trigger a new loop for new one.
+                if (existingPollingLoop) {
+                    logger.fine(
+                        "MSDA: onPost, " +
+                        instanceName +
+                        " update config, will terminate existing polling loop."
+                    );
+                } else {
+                    logger.fine(
+                        "MSDA: onPost, " +
+                        instanceName +
+                        " update config, will trigger a new polling loop."
+                    );
+                    stopPolling = false;
+                }
+            }
+        }
+
+        if (stopPolling) {
             process.nextTick(() => {
                 clearTimeout(pollRegistry);
-                logger.fine("MSDA: onPost/stopping, Stop polling registry for: " + inputPoolName);
+                logger.fine(
+                    "MSDA: onPost/stopping, " +
+                    instanceName +
+                    " Stop polling registry for: ",
+                    inputServiceName
+                );
             });
             // Delete pool configuration in case it still there.
             setTimeout (function () {
                 const commandDeletePool = 'tmsh -a delete ltm pool ' + inputPoolName;
                 mytmsh.executeCommand(commandDeletePool)
                 .then (function () {
-                    logger.fine("MSDA: onPost/stopping, the pool removed: " + inputPoolName);
+                    logger.fine(
+                        "MSDA: onPost/stopping, " +
+                        instanceName +
+                        " the pool removed: " +
+                        inputPoolName
+                    );
                 })
                     // Error handling
                 .catch(function (err) {
-                    logger.fine("MSDA: onPost/stopping, Delete failed: " + inputPoolName + err.message);
+                    logger.fine(
+                        "MSDA: onPost/stopping, " +
+                        instanceName +
+                        " Delete failed: " +
+                        inputPoolName,
+                        err.message
+                    );
+                }).done(function () {
+                    return logger.fine(
+                        "MSDA: onPost/stopping, " +
+                        instanceName +
+                        " exit loop."
+                    );
                 });
             }, 2000);
         }
@@ -316,12 +544,14 @@ msdazkConfigProcessor.prototype.onDelete = function (restOperation) {
 
     logger.fine("MSDA: onDelete, msdazkConfigProcessor.prototype.onDelete");
 
+    var instanceName;
     var inputProperties;
     try {
         configTaskState = configTaskUtil.getAndValidateConfigTaskState(restOperation);
         blockState = configTaskState.block;
         inputProperties = blockUtil.getMapFromPropertiesAndValidate(blockState.inputProperties,
             ["poolName", "poolType"]);
+        instanceName = blockState.name;
     } catch (ex) {
         restOperation.fail(ex);
         return;
@@ -343,37 +573,62 @@ msdazkConfigProcessor.prototype.onDelete = function (restOperation) {
 
     mytmsh.executeCommand("tmsh -a list ltm pool " + inputProperties.poolName.value)
         .then(function () {
-            logger.fine("MSDA: onDelete, delete Found a pre-existing pool. Full Config Delete: " + inputProperties.poolName.value);
+            logger.fine(
+                "MSDA: onDelete, " +
+                instanceName +
+                " delete Found a pre-existing pool. Full Config Delete: ",
+                inputProperties.poolName.value
+            );
             const commandDeletePool = 'tmsh -a delete ltm pool ' + inputProperties.poolName.value;
             return mytmsh.executeCommand(commandDeletePool)
             .then (function (response) {
-                logger.fine("MSDA: onDelete, delete The pool is all removed: " + inputProperties.poolName.value);
+                logger.fine(
+                    "MSDA: onDelete, " +
+                    instanceName +
+                    " delete The pool is all removed: ",
+                    inputProperties.poolName.value
+                );
                 configTaskUtil.sendPatchToUnBoundState(configTaskState,
                     oThis.getUri().href, restOperation.getBasicAuthorization());
                 });
         }, function (error) {
             // the configuration must be clean. Nothing to delete
+            logger.fine(
+                "MSDA: onDelete, " + instanceName + " pool does't exist: ",
+                error.message
+            );
             configTaskUtil.sendPatchToUnBoundState(configTaskState, 
                 oThis.getUri().href, restOperation.getBasicAuthorization());
         })
         // Error handling - Set the block as 'ERROR'
         .catch(function (error) {
-            logger.fine("MSDA: onDelete, Delete failed, setting block to ERROR: " + error.message);
+            logger.fine(
+                "MSDA: onDelete, " +
+                instanceName +
+                " Delete failed, setting block to ERROR: ",
+                error.message
+            );
             configTaskUtil.sendPatchToErrorState(configTaskState, error,
                 oThis.getUri().href, restOperation.getBasicAuthorization());
         })
         // Always called, no matter the disposition. Also handles re-throwing internal exceptions.
         .done(function () {
-            logger.fine("MSDA: onDelete, delete DONE!!! Continue to clear the polling signal for: " + inputProperties.poolName.value);  // happens regardless of errors or no errors ....
+            logger.fine(
+                "MSDA: onDelete, " +
+                instanceName +
+                " delete DONE!!! Continue to clear the polling signal."
+            );  // happens regardless of errors or no errors ....
             // Delete the polling signal
-            let signalIndex = global.msdazkOnPolling.indexOf(inputProperties.poolName.value);
+            let signalIndex = global.msdazkOnPolling.findIndex(
+              (instance) => instance.name === instanceName
+            );
             global.msdazkOnPolling.splice(signalIndex,1);
         });    
     
     // Stop polling registry while undeploy ??
     //stopPolling = true;
     //stopPollingEvent.emit('stopPollingRegistry');
-    logger.fine("MSDA: onDelete, Stop polling Registry while ondelete action.");
+    //logger.fine("MSDA: onDelete, Stop polling Registry while ondelete action.");
 };
 
 module.exports = msdazkConfigProcessor;
