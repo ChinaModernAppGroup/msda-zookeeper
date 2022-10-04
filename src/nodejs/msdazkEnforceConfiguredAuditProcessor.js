@@ -14,13 +14,18 @@
 
   Updated by Ping Xiong on May/13/2022
   Updated by Ping Xiong on Jun/30/2022, using global var for polling signal.
-
+  pdated by Ping Xiong on Oct/04/2022, modify the polling signal into a json object to keep more information.
+  let blockInstance = {
+    name: "instanceName", // a block instance of the iapplx config
+    state: "polling", // can be "polling" for normal running state; "update" to modify the iapplx config
+    bigipPool: "/Common/samplePool"
+  }
 */
 
 'use strict';
 
 
-var q = require("q");
+//var q = require("q");
 
 var blockUtil = require("./blockUtils");
 var logger = require("f5-logger").getInstance();
@@ -93,33 +98,35 @@ msdazkEnforceConfiguredAuditProcessor.prototype.onPost = function (restOperation
       // Check the polling state, trigger ConfigProcessor if needed.
       // Move the signal checking here
       logger.fine("MSDA zk Audit: msdazkOnpolling: ", global.msdazkOnPolling);
-      logger.fine(
-        "MSDA zk Audit: msdazk poolName: ",
-        blockInputProperties.poolName.value
-      );
+      logger.fine("MSDA zk Audit: msdazk poolName: ", blockInputProperties.poolName.value);
       if (
-        global.msdazkOnPolling.includes(blockInputProperties.poolName.value)
+          global.msdazkOnPolling.some(
+            (instance) =>
+              instance.bigipPool === blockInputProperties.poolName.value
+          )
       ) {
         logger.fine(
-          "MSDA zk audit onPost: ConfigProcessor is on polling state, no need to fire an onPost."
+            "MSDA zk audit onPost: ConfigProcessor is on polling state, no need to fire an onPost.",
+            blockInputProperties.poolName.value
         );
       } else {
         logger.fine(
-          "MSDA zk audit onPost: ConfigProcessor is NOT on polling state, will trigger ConfigProcessor onPost."
+            "MSDA zk audit onPost: ConfigProcessor is NOT on polling state, will trigger ConfigProcessor onPost.",
+            blockInputProperties.poolName.value
         );
         try {
-          var poolNameObject = getObjectByID(
-            "poolName",
-            auditTaskState.currentInputProperties
-          );
-          poolNameObject.value = null;
-          oThis.finishOperation(restOperation, auditTaskState);
-          logger.fine("MSDA zk audit onPost: trigger ConfigProcessor onPost ");
+            var poolNameObject = getObjectByID(
+              "poolName",
+              auditTaskState.currentInputProperties
+            );
+            poolNameObject.value = null;
+            oThis.finishOperation(restOperation, auditTaskState);
+            logger.fine("MSDA zk audit onPost: trigger ConfigProcessor onPost ");
         } catch (err) {
-          logger.fine(
-            "MSDA zk audit onPost: Failed to send out restOperation. ",
-            err.message
-          );
+            logger.fine(
+                "MSDA zk audit onPost: Failed to send out restOperation. ",
+                err.message
+            );
         }
       }
     } catch (ex) {
@@ -129,7 +136,7 @@ msdazkEnforceConfiguredAuditProcessor.prototype.onPost = function (restOperation
       );
       restOperation.fail(ex);
     }
-  }, 1000);
+  }, 2000);
 };
 
 var getObjectByID = function ( key, array) {
