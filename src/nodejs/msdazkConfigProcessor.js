@@ -626,7 +626,7 @@ msdazkConfigProcessor.prototype.onDelete = function (restOperation) {
             logger.fine(
                 "MSDA: onDelete, " +
                 instanceName +
-                " delete DONE!!! Continue to clear the polling signal."
+                " Bigip configuration delete DONE!!!"
             );  // happens regardless of errors or no errors ....
             // Delete the polling signal
             //let signalIndex = global.msdazkOnPolling.findIndex(
