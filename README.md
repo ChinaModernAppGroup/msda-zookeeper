@@ -42,6 +42,35 @@ Save the JSON to block.json and use it in the curl call. Refer to the clouddoc l
       }
     },
     {
+      "id": "applicationType",
+      "type": "STRING",
+      "value": "generic",
+      "metaData": {
+        "description": "Application Type, for example DCITS-DUBBO for core banking system",
+        "displayName": "Application Type",
+        "isRequired": true,
+        "uiType": "dropdown",
+        "uiHints": {
+          "list": {
+            "dataList": [
+              "dcits-dubbo",
+              "generic"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "serviceName",
+      "type": "STRING",
+      "value": "/services/http",
+      "metaData": {
+        "description": "Service name to be exposed",
+        "displayName": "Service Name in registry",
+        "isRequired": false
+      }
+    },
+    {
       "id": "poolName",
       "type": "STRING",
       "value": "/Common/zkSamplePool",
@@ -82,24 +111,9 @@ Save the JSON to block.json and use it in the curl call. Refer to the clouddoc l
         "uiType": "dropdown",
         "uiHints": {
           "list": {
-            "dataList": [
-              "tcp",
-              "udp",
-              "http",
-              "none"
-            ]
+            "dataList": ["tcp", "udp", "http", "none"]
           }
         }
-      }
-    },
-    {
-      "id": "serviceName",
-      "type": "STRING",
-      "value": "/services/http",
-      "metaData": {
-        "description": "Service name to be exposed",
-        "displayName": "Service Name in registry",
-        "isRequired": false
       }
     }
   ],
@@ -118,9 +132,12 @@ Save the JSON to block.json and use it in the curl call. Refer to the clouddoc l
   "configurationProcessorReference": {
     "link": "https://localhost/mgmt/shared/iapp/processors/msdazkConfig"
   },
+  "auditProcessorReference": {
+    "link": "https://localhost/mgmt/shared/iapp/processors/msdazkEnforceConfiguredAudit"
+  },
   "audit": {
-    "intervalSeconds": 0,
-    "policy": "NOTIFY_ONLY"
+    "intervalSeconds": 60,
+    "policy": "ENFORCE_CONFIGURED"
   },
   "configProcessorTimeoutSeconds": 30,
   "statsProcessorTimeoutSeconds": 15,

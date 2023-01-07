@@ -1,6 +1,6 @@
 {
   "name": "f5-iappslx-msda-zk",
-  "version": "0.0.3",
+  "version": "0.0.5",
   "private": true,
   "description": "iapp to pull service nodes configuration from etcd to set up a pool on a local big-ip",
   "scripts": {
@@ -12,8 +12,10 @@
   "author": "iappsdev@f5.com",
   "license": "Apache-2.0",
   "dependencies": {
-    "f5-logger": "^1.0.0",
-    "q": "^1.5.1"
+    "node-zookeeper-client": "^1.1.1",
+    "q": "^1.5.1",
+    "url": "^0.11.0",
+    "urlencode": "^1.1.0"
   },
   "devDependencies": {
     "istanbul": "^0.2.11",
