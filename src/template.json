@@ -12,6 +12,35 @@
       }
     },
     {
+      "id": "applicationType",
+      "type": "STRING",
+      "value": "generic",
+      "metaData": {
+        "description": "Application Type, for example DCITS-DUBBO for core banking system",
+        "displayName": "Application Type",
+        "isRequired": true,
+        "uiType": "dropdown",
+        "uiHints": {
+          "list": {
+            "dataList": [
+              "dcits-dubbo",
+              "generic"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "serviceName",
+      "type": "STRING",
+      "value": "/services/http",
+      "metaData": {
+        "description": "Service name to be exposed",
+        "displayName": "Service Name in registry",
+        "isRequired": false
+      }
+    },
+    {
       "id": "poolName",
       "type": "STRING",
       "value": "/Common/zkSamplePool",
@@ -52,24 +81,9 @@
         "uiType": "dropdown",
         "uiHints": {
           "list": {
-            "dataList": [
-              "tcp",
-              "udp",
-              "http",
-              "none"
-            ]
+            "dataList": ["tcp", "udp", "http", "none"]
           }
         }
-      }
-    },
-    {
-      "id": "serviceName",
-      "type": "STRING",
-      "value": "/services/http",
-      "metaData": {
-        "description": "Service name to be exposed",
-        "displayName": "Service Name in registry",
-        "isRequired": false
       }
     }
   ],

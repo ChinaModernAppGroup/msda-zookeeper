@@ -20,6 +20,7 @@
     state: "polling", // can be "polling" for normal running state; "update" to modify the iapplx config
     bigipPool: "/Common/samplePool"
   }
+  Updated by Ping Xiong on Jan/07/2023, add applicationType dropdown list, parse host(ip:port) from DCITS dubbo url
 */
 
 'use strict';
@@ -31,7 +32,9 @@ var logger = require('f5-logger').getInstance();
 var mytmsh = require('./TmshUtil');
 var zookeeper = require('node-zookeeper-client');
 //var EventEmitter = require('events').EventEmitter;
-//var stopPollingEvent = new EventEmitter(); 
+//var stopPollingEvent = new EventEmitter();
+var url = require("url");
+var urlencode = require("urlencode");
 
 
 // Setup a polling signal for audit.
@@ -110,8 +113,8 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
         logger.fine("MSDA: onPost, dataProperties ", blockState.dataProperties);
         logger.fine("MSDA: onPost, instanceName ", blockState.name);
         inputProperties = blockUtil.getMapFromPropertiesAndValidate(
-            blockState.inputProperties,
-            ["zkEndpoint", "poolName", "poolType", "healthMonitor", "serviceName"]
+          blockState.inputProperties,
+          ["zkEndpoint", "applicationType", "serviceName", "poolName", "poolType", "healthMonitor"]
         );
         dataProperties = blockUtil.getMapFromPropertiesAndValidate(
             blockState.dataProperties,
@@ -136,6 +139,7 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
     //Accept input proterties, set the status to BOUND.
 
     var inputEndPoint = inputProperties.zkEndpoint.value;
+    const inputApplicationType = inputProperties.applicationType.value;
     const inputServiceName = inputProperties.serviceName.value;
     const inputPoolName = inputProperties.poolName.value;
     const inputPoolType = inputProperties.poolType.value;
@@ -344,8 +348,27 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
                     );
                     // Configure the children into BIG-IP
                     if (children) {
+                        // Parse the host information(ip:port) based on the application type
                         // Format the node information into pool members form
-                        poolMembers = "{" + children.join(" ") + "}";
+                        switch (inputApplicationType) {
+                            case "dcits-dubbo":
+                                logger.fine(
+                                  "MSDA: onPost, " +
+                                    instanceName +
+                                    " Application Type: ",
+                                  inputApplicationType
+                                );
+                                let nodeAddress = [];
+                                children.forEach((element) => {
+                                    nodeAddress.push(
+                                      url.parse(urlencode.decode(element)).host
+                                    );
+                                });
+                                poolMembers = "{" + nodeAddress.join(" ") + "}";
+                                break;
+                            default:
+                                poolMembers = "{" + children.join(" ") + "}";
+                        }
                         logger.fine(
                             "MSDA: onPost, " +
                             instanceName +
