@@ -86,6 +86,39 @@ msdazkConfigProcessor.prototype.onStart = function (success) {
         restHelper: this.restHelper
     });
     
+    // Check the db key bigpipe.displayservicenames, modify it into false if needed.
+    mytmsh.executeCommand("tmsh -a list sys db bigpipe.displayservicenames")
+    .then(function (result) {
+        if (result.indexOf("true") > -1) {
+            logger.fine(
+                "MSDA: onStart, bigpipe.displayservicenames is true, will modify it into false."
+            );
+            return mytmsh
+                .executeCommand(
+                "tmsh -a modify sys db bigpipe.displayservicenames value false"
+                )
+                .then(function () {
+                logger.fine(
+                    "MSDA: onStart, updated bigpipe.displayservicenames into false."
+                );
+                });
+        } else {
+            return logger.fine(
+              "MSDA: onStart, bigpipe.displayservicenames is false, no change needed."
+            );
+        }
+    }, function () {
+        return logger.fine(
+            "MSDA: onStart, fail to list the db key bigpipe.displayservicenames."
+        );
+    })
+    .catch(function (error) {
+        logger.fine(
+          "MSDA: onStart, fail to list the db key bigpipe.displayservicenames. ",
+          error.message
+        );
+    });
+
     success();
 };
 
@@ -350,7 +383,7 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
                                     let commandUpdatePool = 'tmsh -a modify ltm pool ' + inputPoolName + ' members delete { all}';
                                     return mytmsh
                                       .executeCommand(commandUpdatePool)
-                                      .then(function (response) {
+                                      .then(function () {
                                         logger.fine(
                                           "MSDA: onPost, " +
                                             instanceName +
@@ -358,7 +391,7 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
                                         );
                                       });
                                 }
-                            }, function (error) {
+                            }, function () {
                                 logger.fine(
                                     "MSDA: onPost, " +
                                     instanceName +
