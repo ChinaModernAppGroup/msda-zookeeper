@@ -272,6 +272,30 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
         inputEndPoint
     );
 
+    // Define functions compare pool members
+
+    function getPoolMembers(result) {
+      const lines = result.split("\n");
+      let poolMembers = [];
+      lines.forEach((line, i) => {
+        if (line.indexOf("address") > -1) {
+          let memberLine = lines[i - 1];
+          memberLine = memberLine.trim();
+          memberLine = memberLine.split(" ");
+          poolMembers.push(memberLine[0]);
+        }
+      });
+      return poolMembers;
+    }
+
+    function compareArray(array1, array2) {
+      return (
+        array1.length === array2.length &&
+        array1.every((item) => array2.indexOf(item) > -1)
+      );
+    }
+
+
 
     //Create zkclient to the registry
     var zkClient = zookeeper.createClient(inputEndPoint, { retries: 3 });
@@ -299,21 +323,41 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
                             " endpoint list is empty, will clear the BIG-IP pool as well"
                         );
                         mytmsh.executeCommand("tmsh -a list ltm pool " + inputPoolName)
-                            .then(function () {
+                            .then(function (result) {
+                                // Get pool members from list result
+                                let poolMembersArray = getPoolMembers(result);
                                 logger.fine(
                                     "MSDA: onPost, " +
                                     instanceName +
-                                    " found the pool, will delete all members as it's empty."
+                                    " found the pool, will delete all members as it's empty.",
+                                    poolMembersArray
                                 );
-                                let commandUpdatePool = 'tmsh -a modify ltm pool ' + inputPoolName + ' members delete { all}';
-                                return mytmsh.executeCommand(commandUpdatePool)
-                                    .then(function (response) {
+
+                                if (poolMembersArray.length == 0) {
+                                    return logger.fine(
+                                      "MSDA: onPost, " +
+                                        instanceName +
+                                        " Existing pool has the same member list as service registry, will not update the BIG-IP config. ",
+                                      inputPoolName
+                                    );
+                                } else {
+                                    logger.fine(
+                                      "MSDA: onPost, " +
+                                        instanceName +
+                                        " Existing pool has the different member list compare to service registry, will update the BIG-IP config. ",
+                                      inputPoolName
+                                    );
+                                    let commandUpdatePool = 'tmsh -a modify ltm pool ' + inputPoolName + ' members delete { all}';
+                                    return mytmsh
+                                      .executeCommand(commandUpdatePool)
+                                      .then(function (response) {
                                         logger.fine(
-                                            "MSDA: onPost, " +
+                                          "MSDA: onPost, " +
                                             instanceName +
                                             " update the pool to delete all members as it's empty. "
                                         );
-                                    });
+                                      });
+                                }
                             }, function (error) {
                                 logger.fine(
                                     "MSDA: onPost, " +
@@ -350,6 +394,7 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
                     if (children) {
                         // Parse the host information(ip:port) based on the application type
                         // Format the node information into pool members form
+                        let nodeAddress = [];
                         switch (inputApplicationType) {
                             case "dcits-dubbo":
                                 logger.fine(
@@ -358,17 +403,26 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
                                     " Application Type: ",
                                   inputApplicationType
                                 );
-                                let nodeAddress = [];
+                                //let nodeAddress = [];
                                 children.forEach((element) => {
                                     nodeAddress.push(
                                       url.parse(urlencode.decode(element)).host
                                     );
                                 });
-                                poolMembers = "{" + nodeAddress.join(" ") + "}";
+                                //poolMembers = "{" + nodeAddress.join(" ") + "}";
                                 break;
                             default:
-                                poolMembers = "{" + children.join(" ") + "}";
+                                nodeAddress = children;
+                                //poolMembers = "{" + children.join(" ") + "}";
                         }
+                        logger.fine(
+                            "MSDA: onPost, " +
+                            instanceName +
+                            " service endpoint list: ",
+                            nodeAddress
+                        );
+                        poolMembers = "{" + nodeAddress.join(" ") + "}";
+
                         logger.fine(
                             "MSDA: onPost, " +
                             instanceName +
@@ -386,15 +440,35 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
                         // Use tmsh to update BIG-IP configuration instead of restful API
 
                         // Start with check the exisitence of the given pool
-                        mytmsh.executeCommand("tmsh -a list ltm pool " + inputPoolName).then(function () {
+                        mytmsh.executeCommand("tmsh -a list ltm pool " + inputPoolName).then(function (result) {
+
+                            // Get pool members from list result
+                            let poolMembersArray = getPoolMembers(result);
                             logger.fine(
                                 "MSDA: onPost, " +
                                 instanceName +
-                                " Found a pre-existing pool. Update pool setting: ",
-                                inputPoolName
+                                " Found a pre-existing pool: " +
+                                inputPoolName + " has members: ",
+                                poolMembersArray
                             );
-                            let commandUpdatePool = 'tmsh -a modify ltm pool ' + inputPoolConfig;
-                            return mytmsh.executeCommand(commandUpdatePool);
+
+                            if (compareArray(nodeAddress, poolMembersArray)) {
+                                return logger.fine(
+                                  "MSDA: onPost, " +
+                                    instanceName +
+                                    " Existing pool has the same member list as service registry, will not update the BIG-IP config. ",
+                                    inputPoolName
+                                );
+                            } else {
+                                logger.fine(
+                                  "MSDA: onPost, " +
+                                    instanceName +
+                                    " Existing pool has the different member list compare to service registry, will update the BIG-IP config. ",
+                                  inputPoolName
+                                );
+                                let commandUpdatePool = "tmsh -a modify ltm pool " + inputPoolConfig;
+                                return mytmsh.executeCommand(commandUpdatePool);
+                            }
                         }, function (error) {
                             logger.fine("MSDA: onPost, GET of pool failed, adding from scratch: " + inputPoolName);
                             let commandCreatePool = 'tmsh -a create ltm pool ' + inputPoolConfig;
