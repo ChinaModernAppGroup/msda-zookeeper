@@ -16,8 +16,8 @@
       "type": "STRING",
       "value": "generic",
       "metaData": {
-        "description": "Application Type, for example DCITS-DUBBO for core banking system",
-        "displayName": "Application Type",
+        "description": "Application Profile, for example DCITS-DUBBO for core banking system",
+        "displayName": "Application Profile",
         "isRequired": true,
         "uiType": "dropdown",
         "uiHints": {
