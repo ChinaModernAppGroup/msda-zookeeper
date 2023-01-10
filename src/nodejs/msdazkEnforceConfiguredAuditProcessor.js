@@ -80,7 +80,7 @@ msdazkEnforceConfiguredAuditProcessor.prototype.onPost = function (restOperation
   var oThis = this;
   var auditTaskState = restOperation.getBody();
 
-  setTimeout(function () {
+  //setTimeout(function () {
     try {
       if (!auditTaskState) {
         throw new Error("AUDIT: Audit task state must exist ");
@@ -136,7 +136,7 @@ msdazkEnforceConfiguredAuditProcessor.prototype.onPost = function (restOperation
       );
       restOperation.fail(ex);
     }
-  }, 2000);
+  //}, 2000);
 };
 
 var getObjectByID = function ( key, array) {
