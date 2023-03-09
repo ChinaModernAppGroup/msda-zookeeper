@@ -21,6 +21,7 @@
     bigipPool: "/Common/samplePool"
   }
   Updated by Ping Xiong on Jan/07/2023, add applicationType dropdown list, parse host(ip:port) from DCITS dubbo url
+  Mar/09/2023, update delta of pool members instead of replace-all-with latest config. Updated by Ping Xiong.
 */
 
 'use strict';
@@ -499,8 +500,31 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
                                     " Existing pool has the different member list compare to service registry, will update the BIG-IP config. ",
                                   inputPoolName
                                 );
-                                let commandUpdatePool = "tmsh -a modify ltm pool " + inputPoolConfig;
-                                return mytmsh.executeCommand(commandUpdatePool);
+
+                                // Find the difference between registry and big-ip config, update on Mar/09/2023 by Ping Xiong
+                                const toAdd = nodeAddress.filter(
+                                  (x) => !poolMembersArray.includes(x)
+                                );
+                                const toDelete = poolMembersArray.filter(
+                                  (x) => !nodeAddress.includes(x)
+                                );
+
+                                if (toAdd.length !== 0) { 
+                                    // Add pool members
+                                    const poolMembersToAdd = "{" + toAdd.join(" ") + "}";
+                                    const commandAddPoolMember = "tmsh -a modify ltm pool " + inputPoolName + ' members add ' + poolMembersToAdd;
+                                    return mytmsh.executeCommand(commandAddPoolMember);
+                                };
+
+                                if (toDelete.length !== 0) {
+                                    // Delete pool members
+                                    const poolMembersToDelete = "{" + toDelete.join(" ") + "}";
+                                    const commandDeletePoolMember = "tmsh -a modify ltm pool " + inputPoolName + ' members delete ' + poolMembersToDelete;
+                                    return mytmsh.executeCommand(commandDeletePoolMember);
+                                };
+                                
+                                //let commandUpdatePool = "tmsh -a modify ltm pool " + inputPoolConfig;
+                                //return mytmsh.executeCommand(commandUpdatePool);
                             }
                         }, function (error) {
                             logger.fine("MSDA: onPost, GET of pool failed, adding from scratch: " + inputPoolName);
