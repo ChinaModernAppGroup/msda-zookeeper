@@ -342,7 +342,11 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
 
 
     //Create zkclient to the registry
-    var zkClient = zookeeper.createClient(inputEndPoint, { retries: 3 });
+    var zkClient = zookeeper.createClient(inputEndPoint,
+        {
+            sessionTimeout: 3000,
+            retries: 3
+        });
 
     // Poll the change of the service, list all end-points and inject into F5.
     function listChildren(zkClient, inputServiceName) {
@@ -593,7 +597,10 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
             }
 
             // Start to poll the zk registry ...
-            zkClient = zookeeper.createClient(inputEndPoint, { retries: 3 });
+            /*zkClient = zookeeper.createClient(inputEndPoint, {
+                sessionTimeout: 3000,
+                retries: 3
+            });*/
             zkClient.connect();
             zkClient.once('connected', function () {
                 logger.fine(
