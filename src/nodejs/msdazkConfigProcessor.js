@@ -342,12 +342,12 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
 
 
     //Create zkclient to the registry
-    var zkClient = zookeeper.createClient(inputEndPoint,
+    /*var zkClient = zookeeper.createClient(inputEndPoint,
         {
             sessionTimeout: 3000,
             retries: 3
         });
-
+        */
     // Poll the change of the service, list all end-points and inject into F5.
     function listChildren(zkClient, inputServiceName) {
         zkClient.getChildren(
@@ -597,27 +597,43 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
             }
 
             // Start to poll the zk registry ...
-            /*zkClient = zookeeper.createClient(inputEndPoint, {
+            var zkClient = zookeeper.createClient(inputEndPoint, {
                 sessionTimeout: 3000,
                 retries: 3
-            });*/
+            });
             zkClient.connect();
-            zkClient.once('connected', function () {
+            const timeoutDuration = 5000; // Set 5s timeout for connected event.
+            const timeout = setTimeout(() => {
                 logger.fine(
-                    "MSDA: onPost, " +
+                  "MSDA: onPost, " +
+                    instanceName +
+                    "Fail to connect to the registry, will remove the connected listener."
+                );;
+                // Remove the listener
+                zkClient.removeListener("connected", connectedListener);
+            }, timeoutDuration);
+
+            // Define the listener
+            function connectedListener() {
+                logger.fine(
+                  "MSDA: onPost, " +
                     instanceName +
                     " registry connected, will retrieve service end-points for ",
-                    inputPoolName
+                  inputPoolName
                 );
                 listChildren(zkClient, inputServiceName);
                 zkClient.close();
                 logger.fine(
-                    "MSDA: onPost, " +
+                  "MSDA: onPost, " +
                     instanceName +
                     " registry connection closed for ",
-                    inputServiceName
+                  inputServiceName
                 );
-            });
+                clearTimeout(timeout); // Clear timer
+            }
+
+            zkClient.once("connected", connectedListener);
+
             schedule(); // How to handle potential overlapping issue?
         }, pollInterval);
 
