@@ -607,7 +607,7 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
                 logger.fine(
                   "MSDA: onPost, " +
                     instanceName +
-                    "Fail to connect to the registry, will remove the connected listener."
+                    " fail to connect to the registry, will remove the connected listener."
                 );;
                 // Remove the listener
                 zkClient.removeListener("connected", connectedListener);
