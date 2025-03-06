@@ -5,27 +5,34 @@ This iApp is an example of MSDA for etcdv2, including an audit processor.
 ## Build (requires rpmbuild)
 
   Check the modules dependency:
+
 ```bash
     $ cd src/nodejs
     $ npm list
 ```
+
   Fix all dependent modules with `npm install` command.
   Go back to the root direct of the project, build an rpm package:
+
 ```bash
     $ cd ../..
     $ npm run build
 ```
 
 Build output is an RPM package
+
 ## Using IAppLX from BIG-IP UI
-If you are using BIG-IP, install f5-iapplx-msda-zk RPM package using iApps->Package Management LX->Import screen. To create an application, use iApps-> Templates LX -> Application Services -> Applications LX -> Create screen. Default IApp LX UI will be rendered based on the input properties specified in basic pool IAppLX.
+
+If you are using BIG-IP, install f5-iapplx-msda-zk RPM package using iApps->Package Management LX->Import screen.
+To create an application, use iApps-> Templates LX -> Application Services -> Applications LX -> Create screen.
+Default IApp LX UI will be rendered based on the input properties specified in basic pool IAppLX.
 
 ## Using IAppLX from REST API to configure BIG-IP
 
 Using the REST API to work with BIG-IP with f5-iapplx-msda-zk IAppLX package installed. 
 
 Create an Application LX block with all inputProperties as shown below.
-Save the JSON to block.json and use it in the curl call. Refer to the clouddoc link for more detail: https://clouddocs.f5.com/products/iapp/iapp-lx/tmos-14_0/iapplx_ops_tutorials/creating_iappslx_with_rest.html .
+Save the JSON to block.json and use it in the curl call. Refer to the clouddoc link for more detail: <https://clouddocs.f5.com/products/iapp/iapp-lx/tmos-14_0/iapplx_ops_tutorials/creating_iappslx_with_rest.html> .
 
 ```json
 {
@@ -151,7 +158,8 @@ Save the JSON to block.json and use it in the curl call. Refer to the clouddoc l
 }
 ```
 
-Post the block through REST API using curl. 
+Post the block through REST API using curl.
+
 ```bash
 curl -sk -X POST -d @block.json https://bigip_mgmt_ip:8443/mgmt/shared/iapp/blocks
 ```
