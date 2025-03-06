@@ -24,7 +24,9 @@ Build output is an RPM package
 ## Using IAppLX from BIG-IP UI
 
 If you are using BIG-IP, install f5-iapplx-msda-zk RPM package using iApps->Package Management LX->Import screen.
+
 To create an application, use iApps-> Templates LX -> Application Services -> Applications LX -> Create screen.
+
 Default IApp LX UI will be rendered based on the input properties specified in basic pool IAppLX.
 
 ## Using IAppLX from REST API to configure BIG-IP
