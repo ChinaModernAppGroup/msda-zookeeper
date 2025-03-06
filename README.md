@@ -31,7 +31,7 @@ Default IApp LX UI will be rendered based on the input properties specified in b
 
 ## Using IAppLX from REST API to configure BIG-IP
 
-Using the REST API to work with BIG-IP with f5-iapplx-msda-zk IAppLX package installed. 
+Using the REST API to work with BIG-IP with f5-iapplx-msda-zk IAppLX package installed.
 
 Create an Application LX block with all inputProperties as shown below.
 Save the JSON to block.json and use it in the curl call. Refer to the clouddoc link for more detail: <https://clouddocs.f5.com/products/iapp/iapp-lx/tmos-14_0/iapplx_ops_tutorials/creating_iappslx_with_rest.html> .
