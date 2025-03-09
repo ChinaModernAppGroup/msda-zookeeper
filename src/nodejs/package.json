@@ -1,6 +1,6 @@
 {
   "name": "f5-iappslx-msda-zk",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "private": true,
   "description": "iapp to pull service nodes configuration from etcd to set up a pool on a local big-ip",
   "scripts": {

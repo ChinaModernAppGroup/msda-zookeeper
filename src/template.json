@@ -85,6 +85,15 @@
           }
         }
       }
+    },
+    {
+      "id": "verboseLog",
+      "type": "BOOLEAN",
+      "value": false,
+      "metaData": {
+        "description": "Verbose log in detail",
+        "displayName": "Verbose Log"
+      }
     }
   ],
   "dataProperties": [
