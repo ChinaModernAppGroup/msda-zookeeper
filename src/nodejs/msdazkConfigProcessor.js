@@ -24,6 +24,7 @@
   Updated by Ping Xiong on Jan/07/2023, add applicationType dropdown list, parse host(ip:port) from DCITS dubbo url
   Mar/09/2023, update delta of pool members instead of replace-all-with latest config. Updated by Ping Xiong.
   Aug/11/2023, updated by Ping Xiong, update config will not delete the pool unless the pool changed.
+  Mar/09/2025, updated by Ping Xiong,add initial polling before the main loop and also enable watching the service registry.
 */
 
 'use strict';
@@ -181,6 +182,7 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
     const inputPoolType = inputProperties.poolType.value;
     const inputMonitor = inputProperties.healthMonitor.value;
     var pollInterval = dataProperties.pollInterval.value * 1000;
+    const watchDuration = pollInterval - 1000;
 
     // Check the existence of the pool in BIG-IP, create an empty pool if the pool doesn't exist.
     mytmsh.executeCommand("tmsh -a list ltm pool " + inputPoolName)
@@ -339,23 +341,14 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
       );
     }
 
-
-
-    //Create zkclient to the registry
-    /*var zkClient = zookeeper.createClient(inputEndPoint,
-        {
-            sessionTimeout: 3000,
-            retries: 3
-        });
-        */
     // Poll the change of the service, list all end-points and inject into F5.
     function listChildren(zkClient, inputServiceName) {
         zkClient.getChildren(
             inputServiceName,
-            //function (event) {
-            //    logger.fine("MSDA: onPost, Got watcher event: %s", event);
-            //    listChildren(zkClient, inputServiceName);
-            //},
+            function (event) {
+                logger.fine("MSDA: onPost, Got watcher event: %s", event);
+                listChildren(zkClient, inputServiceName);
+            },
             function (error, children, stat) {
                 if (error) {
                     logger.fine(
@@ -560,10 +553,38 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
         );
     }
 
+    // Create zkclient to the registry for the initial polling
+    var zkClient = zookeeper.createClient(inputEndPoint,
+        {
+            sessionTimeout: pollInterval,
+            retries: dataProperties.pollInterval.value
+        });
+    zkClient.connect();
+    zkClient.once("connected", function(){
+        logger.fine(
+            "MSDA: onPost, " +
+              instanceName +
+              " registry connected, initial polling, will retrieve service end-points for ",
+            inputPoolName
+          );
+        listChildren(zkClient, inputServiceName);
+    });
+    // close the connection after the pollInterval
+    setTimeout(function () {
+        zkClient.close();
+        logger.fine(
+          "MSDA: onPost, " +
+            instanceName +
+            " registry initial polling connection closed for ",
+          inputServiceName
+        );
+    }, watchDuration);
+
+
     // Start the loop to poll the zookeeper service
     (function schedule() {
         var pollRegistry = setTimeout(function () {
-
+            // Check if the signal is "polling"
             // If signal is "update", change it into "polling" for new polling loop
             if (global.msdazkOnPolling.some(instance => instance.name === instanceName)) {
                 let signalIndex = global.msdazkOnPolling.findIndex(instance => instance.name === instanceName);
@@ -596,12 +617,13 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
                 );
             }
 
-            // Start to poll the zk registry ...
+            // Start to poll the zk registry in the main loop ...
             var zkClient = zookeeper.createClient(inputEndPoint, {
-                sessionTimeout: 3000,
-                retries: 3
+                sessionTimeout: pollInterval,
+                retries: dataProperties.pollInterval.value
             });
             zkClient.connect();
+            /* Using .once to avoid the issue of multiple connected event fired. No need to use removeListener.
             const timeoutDuration = 5000; // Set 5s timeout for connected event.
             const timeout = setTimeout(() => {
                 logger.fine(
@@ -612,6 +634,7 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
                 // Remove the listener
                 zkClient.removeListener("connected", connectedListener);
             }, timeoutDuration);
+            
 
             // Define the listener
             function connectedListener() {
@@ -629,10 +652,31 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
                     " registry connection closed for ",
                   inputServiceName
                 );
-                clearTimeout(timeout); // Clear timer
+                // No need to remove the listener
+                //clearTimeout(timeout); // Clear timer
             }
+            */
 
-            zkClient.once("connected", connectedListener);
+            zkClient.once("connected", function () {
+                logger.fine(
+                    "MSDA: onPost, " +
+                      instanceName +
+                      " registry connected, main polling loop, will retrieve service end-points for ",
+                    inputPoolName
+                  );
+                listChildren(zkClient, inputServiceName);
+            });
+
+            // close the connection after the pollInterval
+            setTimeout(function () {
+                zkClient.close();
+                logger.fine(
+                  "MSDA: onPost, " +
+                    instanceName +
+                    " registry main polling connection closed for ",
+                  inputServiceName
+                );
+            }, watchDuration);
 
             schedule(); // How to handle potential overlapping issue?
         }, pollInterval);
