@@ -151,7 +151,7 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
         logger.fine("MSDA: onPost, instanceName ", blockState.name);
         inputProperties = blockUtil.getMapFromPropertiesAndValidate(
           blockState.inputProperties,
-          ["zkEndpoint", "applicationType", "serviceName", "poolName", "poolType", "healthMonitor"]
+          ["zkEndpoint", "applicationType", "serviceName", "poolName", "poolType", "healthMonitor", "verboseLog"]
         );
         dataProperties = blockUtil.getMapFromPropertiesAndValidate(
             blockState.dataProperties,
@@ -181,17 +181,18 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
     const inputPoolName = inputProperties.poolName.value;
     const inputPoolType = inputProperties.poolType.value;
     const inputMonitor = inputProperties.healthMonitor.value;
+    const inputVerboseLog = inputProperties.verboseLog.value;
     var pollInterval = dataProperties.pollInterval.value * 1000;
     const watchDuration = pollInterval - 1000;
 
     // Check the existence of the pool in BIG-IP, create an empty pool if the pool doesn't exist.
     mytmsh.executeCommand("tmsh -a list ltm pool " + inputPoolName)
     .then(function () {
-        logger.fine(
+        if (inputVerboseLog) {logger.fine(
             "MSDA: onPost, " +
             instanceName +
             " found the pool, no need to create an initial empty pool, but update the pool configure."
-        );
+        );}
         let inputExistingPoolConfig = inputPoolName + ' monitor ' + inputMonitor + ' load-balancing-mode ' + inputPoolType;
         let commandModifyPool = 'tmsh -a modify ltm pool ' + inputExistingPoolConfig;
         return mytmsh.executeCommand(commandModifyPool);
@@ -217,21 +218,21 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
     // Set the polling interval
     if (pollInterval) {
         if (pollInterval < 10000) {
-            logger.fine(
+            if (inputVerboseLog) {logger.fine(
                 "MSDA: onPost, " +
                 instanceName +
                 " pollInternal is too short, will set it to 10s ",
                 pollInterval
-            );
+            );}
             pollInterval = 10000;
         }
     } else {
-        logger.fine(
+        if (inputVerboseLog) {logger.fine(
             "MSDA: onPost, " +
             instanceName +
             " pollInternal is not set, will set it to 30s ",
             pollInterval
-        );
+        );}
         pollInterval = 30000;
     }
     
@@ -290,15 +291,6 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
             global.msdazkOnPolling
         );
     }
-
-    /*
-    try {
-        logger.fine("MSDAzk: onPost, will set the polling signal. ");
-        fs.writeFile(msdazkOnPollingSignal, '');
-    } catch (error) {
-        logger.fine("MSDAzk: onPost, hit error while set polling signal: ", error.message);
-    }
-    */
 
     logger.fine(
         "MSDA: onPost, " +
@@ -426,11 +418,11 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
                             });
                     }
                 } else {
-                    logger.fine(
+                    if (inputVerboseLog) {logger.fine(
                         "MSDA: onPost, " + instanceName + " Children of node: %s are: %j.",
                         inputServiceName,
                         children
-                    );
+                    );}
                     // Configure the children into BIG-IP
                     if (children) {
                         // Parse the host information(ip:port) based on the application type
@@ -456,20 +448,20 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
                                 nodeAddress = children;
                                 //poolMembers = "{" + children.join(" ") + "}";
                         }
-                        logger.fine(
+                        if (inputVerboseLog) {logger.fine(
                             "MSDA: onPost, " +
                             instanceName +
                             " service endpoint list: ",
                             nodeAddress
-                        );
+                        );}
                         poolMembers = "{" + nodeAddress.join(" ") + "}";
 
-                        logger.fine(
+                        if (inputVerboseLog) {logger.fine(
                             "MSDA: onPost, " +
                             instanceName +
                             " pool members: " +
                             poolMembers
-                        );
+                        );}
                         let inputPoolConfig = inputPoolName +
                             ' monitor ' +
                             inputMonitor +
@@ -485,13 +477,13 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
 
                             // Get pool members from list result
                             let poolMembersArray = getPoolMembers(result);
-                            logger.fine(
+                            if (inputVerboseLog) {logger.fine(
                                 "MSDA: onPost, " +
                                 instanceName +
                                 " Found a pre-existing pool: " +
                                 inputPoolName + " has members: ",
                                 poolMembersArray
-                            );
+                            );}
 
                             if (compareArray(nodeAddress, poolMembersArray)) {
                                 return logger.fine(
@@ -561,23 +553,23 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
         });
     zkClient.connect();
     zkClient.once("connected", function(){
-        logger.fine(
+        if (inputVerboseLog) {logger.fine(
             "MSDA: onPost, " +
               instanceName +
               " registry connected, initial polling, will retrieve service end-points for ",
             inputPoolName
-          );
+          );}
         listChildren(zkClient, inputServiceName);
     });
     // close the connection after the pollInterval
     setTimeout(function () {
         zkClient.close();
-        logger.fine(
+        if (inputVerboseLog) {logger.fine(
           "MSDA: onPost, " +
             instanceName +
             " registry initial polling connection closed for ",
           inputServiceName
-        );
+        );}
     }, watchDuration);
 
 
@@ -590,20 +582,20 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
                 let signalIndex = global.msdazkOnPolling.findIndex(instance => instance.name === instanceName);
                 if (global.msdazkOnPolling[signalIndex].state === "update") {
                     if (existingPollingLoop) {
-                        logger.fine(
+                        if (inputVerboseLog) {logger.fine(
                             "MSDA: onPost/polling, " +
                             instanceName +
                             " update config, existing polling loop."
-                        );
+                        );}
                     } else {
                         //logger.fine("MSDA: onPost/polling, " + instanceName + " update config, a new polling loop.");
                         global.msdazkOnPolling[signalIndex].state = "polling";
-                        logger.fine(
+                        if (inputVerboseLog) {logger.fine(
                             "MSDA: onPost/polling, " +
                             instanceName +
                             " update the signal.state into polling for new polling loop: ",
                             global.msdazkOnPolling[signalIndex]
-                        );
+                        );}
                     }
                 }
                 // update the existingPollingLoop to true
@@ -658,24 +650,24 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
             */
 
             zkClient.once("connected", function () {
-                logger.fine(
+                if (inputVerboseLog) {logger.fine(
                     "MSDA: onPost, " +
                       instanceName +
                       " registry connected, main polling loop, will retrieve service end-points for ",
                     inputPoolName
-                  );
+                  );}
                 listChildren(zkClient, inputServiceName);
             });
 
             // close the connection after the pollInterval
             setTimeout(function () {
                 zkClient.close();
-                logger.fine(
+                if (inputVerboseLog) {logger.fine(
                   "MSDA: onPost, " +
                     instanceName +
                     " registry main polling connection closed for ",
                   inputServiceName
-                );
+                );}
             }, watchDuration);
 
             schedule(); // How to handle potential overlapping issue?
@@ -694,26 +686,26 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
                 (instance) => instance.name === instanceName
             );
             if (global.msdazkOnPolling[signalIndex].state === "polling") {
-                logger.fine(
+                if (inputVerboseLog) {logger.fine(
                     "MSDA: onPost, " +
                     instanceName + " keep polling registry for: ",
                     inputServiceName
-                );
+                );}
                 stopPolling = false;
             } else {
                 // state = "update", stop polling for existing loop; trigger a new loop for new one.
                 if (existingPollingLoop) {
-                    logger.fine(
+                    if (inputVerboseLog) {logger.fine(
                         "MSDA: onPost, " +
                         instanceName +
                         " update config, will terminate existing polling loop."
-                    );
+                    );}
                 } else {
-                    logger.fine(
+                    if (inputVerboseLog) {logger.fine(
                         "MSDA: onPost, " +
                         instanceName +
                         " update config, will trigger a new polling loop."
-                    );
+                    );}
                     stopPolling = false;
                 }
             }
@@ -722,12 +714,12 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
         if (stopPolling) {
             process.nextTick(() => {
                 clearTimeout(pollRegistry);
-                logger.fine(
+                if (inputVerboseLog) {logger.fine(
                     "MSDA: onPost/stopping, " +
                     instanceName +
                     " Stop polling registry for: ",
                     inputServiceName
-                );
+                );}
             });
             // Delete pool configuration if the pool name changed.
 
@@ -740,12 +732,12 @@ msdazkConfigProcessor.prototype.onPost = function (restOperation) {
                     (instance) => instance.name === instanceName
                 );
                 if (global.msdazkOnPolling[signalIndex].bigipPoolChange === true) {
-                    logger.fine(
+                    if (inputVerboseLog) {logger.fine(
                     "MSDA: onPost, " +
                         instanceName +
                         " BigipPool Changed, will delete previous pool for : ",
                     inputServiceName
-                    );
+                    );}
 
                     setTimeout (function () {
                         const commandDeletePool = 'tmsh -a delete ltm pool ' + inputPoolName;
