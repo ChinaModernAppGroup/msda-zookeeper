@@ -98,6 +98,16 @@
   ],
   "dataProperties": [
     {
+      "id": "flushInterval",
+      "type": "NUMBER",
+      "value": 1,
+      "metaData": {
+        "description": "The flash interval to configure bigip, 1s by default. The maximum value is 10.",
+        "displayName": "Flush Interval to configure data-group",
+        "isRequired": false
+      }
+    },
+    {
       "id": "pollInterval",
       "type": "NUMBER",
       "value": 30,

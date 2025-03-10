@@ -1,6 +1,6 @@
 Summary: F5 Basic iApp
 Name: f5-iapplx-msda-zk
-Version: 0.0.6
+Version: 0.0.7
 Release: 0004
 BuildArch: noarch
 Group: Development/Libraries
